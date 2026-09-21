@@ -44,8 +44,8 @@ h2 { letter-spacing: -.03em; }
 .hero-stat span { font-size: 30px; font-weight: 800; }
 .hero-stat small { color: var(--muted); font-size: 11px; }
 .icon-btn { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--border); background: var(--card); color: var(--text); }
-.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 0; position: sticky; top: env(safe-area-inset-top); z-index: 5; background: linear-gradient(var(--bg) 70%, transparent); }
-.tab { border: 1px solid var(--border); background: var(--card); color: var(--muted); border-radius: 14px; padding: 12px; font-weight: 700; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 14px 0; position: sticky; top: env(safe-area-inset-top); z-index: 5; background: linear-gradient(var(--bg) 70%, transparent); }
+.tab { border: 1px solid var(--border); background: var(--card); color: var(--muted); border-radius: 14px; padding: 11px 6px; font-weight: 700; font-size: 14px; }
 .tab.active { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
 .panel { display: none; }
 .panel.active { display: block; }
@@ -102,6 +102,14 @@ dialog::backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
 .iphone-actions article { padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
 .iphone-actions article p { margin: 6px 0 0; font-size: 13px; }
 .loading { opacity: .65; pointer-events: none; }
+
+.trash-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.trash-list { display:grid; gap:8px; margin-top:12px; }
+.trash-row { display:grid; grid-template-columns:auto 1fr auto; gap:11px; align-items:center; padding:13px 14px; border:1px solid var(--border); border-radius:14px; background:rgba(255,255,255,.025); }
+.trash-row .message-main { min-width:0; }
+.danger-note { color:#ffb6be; font-size:12px; line-height:1.45; margin-top:12px; }
+.unsub-note { color:#9fdcaf; font-size:12px; line-height:1.45; margin-top:8px; }
+
 @media (max-width: 560px) {
   .hero { grid-template-columns: 1fr; }
   .hero-stat { width: 100%; aspect-ratio: auto; border-radius: 14px; padding: 12px; flex-direction: row; gap: 8px; }
@@ -142,6 +150,7 @@ dialog::backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
       <nav class="tabs" aria-label="Modules">
         <button class="tab active" data-tab="gmail">Gmail</button>
         <button class="tab" data-tab="outlook">Hotmail</button>
+        <button class="tab" data-tab="trash">Corbeille</button>
         <button class="tab" data-tab="iphone">iPhone</button>
       </nav>
 
@@ -209,6 +218,36 @@ dialog::backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
         <div id="outlookResults" class="results"></div>
       </section>
 
+      <section id="trashPanel" class="panel">
+        <div class="provider card">
+          <div class="provider-head">
+            <div>
+              <p class="eyebrow">Suppression irréversible</p>
+              <h3>Corbeille</h3>
+              <p class="muted">Charge les éléments supprimés, décoche ceux que tu veux récupérer, puis supprime définitivement le reste.</p>
+            </div>
+          </div>
+          <div class="scan-controls">
+            <label>Compte
+              <select id="trashProvider">
+                <option value="gmail" selected>Gmail</option>
+                <option value="outlook">Hotmail</option>
+              </select>
+            </label>
+            <label>Nombre max. à charger
+              <select id="trashLimit">
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+              </select>
+            </label>
+            <button id="trashScanBtn" class="btn secondary">Charger la corbeille</button>
+          </div>
+          <p class="danger-note">⚠️ La suppression définitive est irréversible. Pour Gmail, Google demandera une autorisation supplémentaire la première fois.</p>
+        </div>
+        <div id="trashResults" class="results"></div>
+      </section>
+
       <section id="iphonePanel" class="panel">
         <div class="card info-card">
           <h3>Photos & fichiers iPhone</h3>
@@ -265,6 +304,12 @@ dialog::backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
         <span>Sélectionner automatiquement toutes les newsletters détectées</span>
       </label>
 
+      <label class="toggle-row">
+        <input id="autoUnsubscribe" type="checkbox" checked />
+        <span>Me désabonner automatiquement avant de supprimer une newsletter</span>
+      </label>
+      <p class="help">Cleaner utilise uniquement les mécanismes standards de désabonnement fournis par l’expéditeur. Certaines newsletters peuvent encore demander une confirmation web.</p>
+
       <div class="dialog-actions">
         <button id="saveSettingsBtn" value="default" class="btn primary">Enregistrer</button>
       </div>
@@ -299,6 +344,8 @@ const state = {
   activeTab: 'gmail',
   messages: { gmail: [], outlook: [] },
   selected: new Set(),
+  trashMessages: { gmail: [], outlook: [] },
+  trashSelected: new Set(),
   keptSenders: new Set(JSON.parse(localStorage.getItem('cleaner.keptSenders') || '[]')),
 };
 
@@ -306,7 +353,10 @@ const settings = {
   get googleClientId() { return localStorage.getItem('cleaner.googleClientId') || ''; },
   get microsoftClientId() { return localStorage.getItem('cleaner.microsoftClientId') || ''; },
   get autoSelect() { return localStorage.getItem('cleaner.autoSelect') !== 'false'; },
+  get autoUnsubscribe() { return localStorage.getItem('cleaner.autoUnsubscribe') !== 'false'; },
 };
+
+const MS_SCOPES = ['User.Read', 'Mail.ReadWrite', 'Mail.Send'];
 
 function toast(msg) {
   const el = $('#toast');
@@ -345,12 +395,18 @@ function headerValue(headers = [], name) {
 }
 
 function parseUnsubscribe(value = '') {
-  const urls = [...value.matchAll(/<([^>]+)>/g)].map(m => m[1]);
-  return urls.find(u => /^https?:\/\//i.test(u)) || null;
+  let entries = [...value.matchAll(/<([^>]+)>/g)].map(m => m[1].trim());
+  if (!entries.length && value.trim()) entries = value.split(',').map(x => x.trim()).filter(Boolean);
+  return {
+    http: entries.find(u => /^https?:\/\//i.test(u)) || null,
+    mailto: entries.find(u => /^mailto:/i.test(u)) || null,
+  };
 }
 
 function isNewsletter({ headers = [], labelIds = [], subject = '', from = '' }) {
   const listUnsub = headerValue(headers, 'List-Unsubscribe');
+  const listUnsubPost = headerValue(headers, 'List-Unsubscribe-Post');
+  const unsub = parseUnsubscribe(listUnsub);
   const listId = headerValue(headers, 'List-ID');
   const precedence = headerValue(headers, 'Precedence').toLowerCase();
   const autoSubmitted = headerValue(headers, 'Auto-Submitted').toLowerCase();
@@ -361,7 +417,13 @@ function isNewsletter({ headers = [], labelIds = [], subject = '', from = '' }) 
   const transactional = /invoice|facture|receipt|reçu|commande|order|reservation|réservation|security|sécurité|code|otp|password|mot de passe/i.test(subject);
   const automated = autoSubmitted && autoSubmitted !== 'no' || Boolean(xAuto);
   const score = (hasStrongHeader ? 3 : 0) + (gmailPromo ? 2 : 0) + (heuristic ? 1 : 0) + (automated ? 1 : 0) - (transactional ? 2 : 0);
-  return { yes: score >= 2, score, unsubscribeUrl: parseUnsubscribe(listUnsub) };
+  return {
+    yes: score >= 2,
+    score,
+    unsubscribeUrl: unsub.http,
+    unsubscribeMailto: unsub.mailto,
+    oneClickUnsubscribe: /List-Unsubscribe\s*=\s*One-Click/i.test(listUnsubPost),
+  };
 }
 
 function cutoffDays(age) {
@@ -460,7 +522,7 @@ async function gmailScan() {
     for (let i = 0; i < ids.length; i += 2) {
       const batch = ids.slice(i, i + 2);
       btn.textContent = `Analyse ${Math.min(i + 2, ids.length)}/${ids.length}`;
-      const chunk = await Promise.all(batch.map(id => gmailApi(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=List-Unsubscribe&metadataHeaders=List-ID&metadataHeaders=Precedence&metadataHeaders=Auto-Submitted&metadataHeaders=X-Auto-Response-Suppress`)));
+      const chunk = await Promise.all(batch.map(id => gmailApi(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=List-Unsubscribe&metadataHeaders=List-Unsubscribe-Post&metadataHeaders=List-ID&metadataHeaders=Precedence&metadataHeaders=Auto-Submitted&metadataHeaders=X-Auto-Response-Suppress`)));
       for (const m of chunk) {
         const headers = m.payload?.headers || [];
         const from = headerValue(headers, 'From');
@@ -469,7 +531,7 @@ async function gmailScan() {
         const ts = Number(m.internalDate || Date.parse(dateRaw) || 0);
         const detected = isNewsletter({ headers, labelIds: m.labelIds || [], subject, from });
         if (detected.yes && (!cutoff || ts < cutoff)) {
-          messages.push({ provider: 'gmail', id: m.id, threadId: m.threadId, from, sender: normalizeSender(from), senderLabel: senderName(from), subject, ts, unsubscribeUrl: detected.unsubscribeUrl, score: detected.score });
+          messages.push({ provider: 'gmail', id: m.id, threadId: m.threadId, from, sender: normalizeSender(from), senderLabel: senderName(from), subject, ts, unsubscribeUrl: detected.unsubscribeUrl, unsubscribeMailto: detected.unsubscribeMailto, oneClickUnsubscribe: detected.oneClickUnsubscribe, score: detected.score });
         }
       }
       if (i + 2 < ids.length) await sleep(140);
@@ -514,7 +576,7 @@ async function outlookConnect() {
   }
   try {
     const app = await initMsal();
-    const request = { scopes: ['User.Read', 'Mail.ReadWrite'], prompt: 'select_account' };
+    const request = { scopes: MS_SCOPES, prompt: 'select_account' };
     const result = await app.loginPopup(request);
     state.msAccount = result.account;
     state.microsoftToken = result.accessToken || (await app.acquireTokenSilent({ ...request, account: result.account })).accessToken;
@@ -535,11 +597,11 @@ async function ensureMsToken() {
   if (!account) throw new Error('Hotmail non connecté');
   state.msAccount = account;
   try {
-    const r = await app.acquireTokenSilent({ scopes: ['User.Read', 'Mail.ReadWrite'], account });
+    const r = await app.acquireTokenSilent({ scopes: MS_SCOPES, account });
     state.microsoftToken = r.accessToken;
     return r.accessToken;
   } catch {
-    const r = await app.acquireTokenPopup({ scopes: ['User.Read', 'Mail.ReadWrite'], account });
+    const r = await app.acquireTokenPopup({ scopes: MS_SCOPES, account });
     state.microsoftToken = r.accessToken;
     return r.accessToken;
   }
@@ -577,7 +639,7 @@ async function outlookScan() {
         const ts = Date.parse(m.receivedDateTime || '') || 0;
         const detected = isNewsletter({ headers, subject, from });
         if (detected.yes && (!cutoff || ts < cutoff)) {
-          messages.push({ provider: 'outlook', id: m.id, from, sender: normalizeSender(from), senderLabel: senderName(from), subject, ts, unsubscribeUrl: detected.unsubscribeUrl, score: detected.score });
+          messages.push({ provider: 'outlook', id: m.id, from, sender: normalizeSender(from), senderLabel: senderName(from), subject, ts, unsubscribeUrl: detected.unsubscribeUrl, unsubscribeMailto: detected.unsubscribeMailto, oneClickUnsubscribe: detected.oneClickUnsubscribe, score: detected.score });
         }
         if (seen >= limit) break;
       }
@@ -742,10 +804,326 @@ async function trashSelected() {
   $('#confirmDialog').showModal();
 }
 
+
+function encodeBase64UrlUtf8(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function parseMailto(uri) {
+  try {
+    const raw = uri.replace(/^mailto:/i, '');
+    const [addressPart, query = ''] = raw.split('?');
+    const params = new URLSearchParams(query);
+    return {
+      to: decodeURIComponent(addressPart || '').trim(),
+      subject: params.get('subject') || 'Unsubscribe',
+      body: params.get('body') || 'Unsubscribe',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function sendUnsubscribeEmail(m) {
+  const info = parseMailto(m.unsubscribeMailto || '');
+  if (!info?.to) throw new Error('Adresse de désabonnement invalide');
+
+  if (m.provider === 'gmail') {
+    const raw = [
+      `To: ${info.to}`,
+      `Subject: ${info.subject}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      '',
+      info.body
+    ].join('\r\n');
+    await gmailApi('/messages/send', {
+      method: 'POST',
+      body: JSON.stringify({ raw: encodeBase64UrlUtf8(raw) })
+    });
+    return;
+  }
+
+  await graph('/me/sendMail', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: {
+        subject: info.subject,
+        body: { contentType: 'Text', content: info.body },
+        toRecipients: [{ emailAddress: { address: info.to } }]
+      },
+      saveToSentItems: true
+    })
+  });
+}
+
+async function oneClickUnsubscribe(url) {
+  if (!url || !/^https:\/\//i.test(url)) throw new Error('Lien de désabonnement non sécurisé');
+  await fetch(url, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'List-Unsubscribe=One-Click',
+    referrerPolicy: 'no-referrer',
+    credentials: 'omit'
+  });
+}
+
+async function autoUnsubscribeSelected(items) {
+  if (!settings.autoUnsubscribe) return { done: 0, manual: [], failed: 0 };
+
+  const bySender = new Map();
+  for (const m of items) {
+    const k = `${m.provider}:${m.sender}`;
+    if (!bySender.has(k)) bySender.set(k, m);
+  }
+
+  let done = 0, failed = 0;
+  const manual = [];
+
+  for (const m of bySender.values()) {
+    try {
+      if (m.unsubscribeMailto) {
+        await sendUnsubscribeEmail(m);
+        done++;
+      } else if (m.unsubscribeUrl && m.oneClickUnsubscribe) {
+        await oneClickUnsubscribe(m.unsubscribeUrl);
+        done++;
+      } else if (m.unsubscribeUrl) {
+        manual.push({ sender: m.senderLabel || m.sender, url: m.unsubscribeUrl });
+      }
+    } catch (e) {
+      console.warn('Désabonnement', m.sender, e);
+      failed++;
+      if (m.unsubscribeUrl) manual.push({ sender: m.senderLabel || m.sender, url: m.unsubscribeUrl });
+    }
+  }
+  return { done, manual, failed };
+}
+
+function renderManualUnsubs(list, provider) {
+  if (!list?.length) return;
+  const root = $(`#${provider}Results`);
+  if (!root) return;
+  const box = document.createElement('div');
+  box.className = 'card';
+  box.innerHTML = `
+    <strong>${list.length} désabonnement${list.length > 1 ? 's' : ''} à confirmer</strong>
+    <p class="muted" style="margin:8px 0 12px">Ces expéditeurs ne proposent pas le désabonnement automatique standard. Ouvre leur lien pour terminer.</p>
+    <div class="toolbar-actions">
+      ${list.slice(0, 20).map((x, i) => `<button class="mini-btn manual-unsub" data-i="${i}">${escapeHtml(x.sender)}</button>`).join('')}
+    </div>`;
+  root.prepend(box);
+  box.querySelectorAll('.manual-unsub').forEach(btn => btn.addEventListener('click', () => {
+    const x = list[Number(btn.dataset.i)];
+    if (x?.url) window.open(x.url, '_blank', 'noopener,noreferrer');
+  }));
+}
+
+async function requestGmailPermanentDeleteAccess() {
+  if (!settings.googleClientId) throw new Error('Client ID Google manquant');
+  if (!window.google?.accounts?.oauth2) throw new Error('Google Identity non chargé');
+
+  return new Promise((resolve, reject) => {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: settings.googleClientId,
+      scope: 'https://mail.google.com/',
+      callback: (resp) => {
+        if (resp.error) return reject(new Error(resp.error_description || resp.error));
+        state.googleToken = resp.access_token;
+        $('#gmailStatus').textContent = 'Connecté';
+        resolve(resp.access_token);
+      },
+      error_callback: (err) => reject(new Error(err?.message || 'Autorisation Google annulée')),
+    });
+    client.requestAccessToken({ prompt: 'consent' });
+  });
+}
+
+function trashKey(m) { return `${m.provider}:trash:${m.id}`; }
+
+async function scanTrash() {
+  const provider = $('#trashProvider').value;
+  const limit = Number($('#trashLimit').value);
+  const btn = $('#trashScanBtn');
+  setBusy(btn, true, 'Chargement…');
+
+  try {
+    const items = [];
+
+    if (provider === 'gmail') {
+      if (!state.googleToken) throw new Error('Connecte Gmail dans l’onglet Gmail.');
+      let pageToken = null;
+      const ids = [];
+      do {
+        const qs = new URLSearchParams({ maxResults: String(Math.min(100, limit - ids.length)), q: 'in:trash' });
+        if (pageToken) qs.set('pageToken', pageToken);
+        const data = await gmailApi(`/messages?${qs}`);
+        ids.push(...(data.messages || []).map(x => x.id));
+        pageToken = data.nextPageToken;
+      } while (pageToken && ids.length < limit);
+
+      for (let i = 0; i < ids.length; i += 2) {
+        const chunk = await Promise.all(ids.slice(i, i + 2).map(id =>
+          gmailApi(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`)
+        ));
+        for (const m of chunk) {
+          const headers = m.payload?.headers || [];
+          const from = headerValue(headers, 'From');
+          items.push({
+            provider: 'gmail',
+            id: m.id,
+            from,
+            sender: normalizeSender(from),
+            senderLabel: senderName(from),
+            subject: headerValue(headers, 'Subject') || '(sans objet)',
+            ts: Number(m.internalDate || Date.parse(headerValue(headers, 'Date')) || 0)
+          });
+        }
+        if (i + 2 < ids.length) await sleep(120);
+      }
+    } else {
+      if (!state.msAccount && !state.microsoftToken) throw new Error('Connecte Hotmail dans l’onglet Hotmail.');
+      let url = `/me/mailFolders/deleteditems/messages?$top=50&$select=id,subject,from,receivedDateTime&$orderby=receivedDateTime%20desc`;
+      let seen = 0;
+      while (url && seen < limit) {
+        const data = await graph(url);
+        for (const m of data.value || []) {
+          seen++;
+          const addr = m.from?.emailAddress?.address || '';
+          const name = m.from?.emailAddress?.name || addr;
+          items.push({
+            provider: 'outlook',
+            id: m.id,
+            from: `${name} <${addr}>`,
+            sender: addr.toLowerCase(),
+            senderLabel: name,
+            subject: m.subject || '(sans objet)',
+            ts: Date.parse(m.receivedDateTime || '') || 0
+          });
+          if (seen >= limit) break;
+        }
+        url = data['@odata.nextLink'] || null;
+      }
+    }
+
+    state.trashMessages[provider] = items;
+    for (const m of items) state.trashSelected.add(trashKey(m));
+    renderTrash(provider);
+    toast(`${items.length} élément${items.length > 1 ? 's' : ''} dans la corbeille`);
+  } catch (e) {
+    console.error(e);
+    $('#trashResults').innerHTML = `<div class="empty"><strong>Erreur</strong><br><br>${escapeHtml(e.message || 'Erreur inconnue')}</div>`;
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+function renderTrash(provider = $('#trashProvider')?.value || 'gmail') {
+  const root = $('#trashResults');
+  const items = state.trashMessages[provider] || [];
+  if (!items.length) {
+    root.innerHTML = '<div class="empty">La corbeille est vide ou n’a pas encore été chargée.</div>';
+    return;
+  }
+
+  const selectedCount = items.filter(m => state.trashSelected.has(trashKey(m))).length;
+  root.innerHTML = `
+    <div class="results-toolbar">
+      <div><strong>${items.length} éléments</strong> · ${selectedCount} sélectionnés</div>
+      <div class="toolbar-actions">
+        <button class="mini-btn" id="trashAllBtn">Tout sélectionner</button>
+        <button class="mini-btn" id="trashNoneBtn">Tout désélectionner</button>
+      </div>
+    </div>
+    <div class="trash-list">
+      ${items.map(m => `
+        <label class="trash-row">
+          <input class="check trash-check" type="checkbox" data-key="${escapeAttr(trashKey(m))}" ${state.trashSelected.has(trashKey(m)) ? 'checked' : ''}>
+          <span class="message-main">
+            <strong>${escapeHtml(m.subject)}</strong>
+            <small>${escapeHtml(m.senderLabel || m.sender || '')}</small>
+          </span>
+          <span class="message-date">${formatDate(m.ts)}</span>
+        </label>`).join('')}
+    </div>
+    <button id="permanentDeleteBtn" class="btn danger" style="width:100%;margin-top:12px">Supprimer définitivement (${selectedCount})</button>
+    <p class="danger-note">Cette action ne peut pas être annulée.</p>
+  `;
+
+  $('#trashAllBtn').addEventListener('click', () => {
+    for (const m of items) state.trashSelected.add(trashKey(m));
+    renderTrash(provider);
+  });
+  $('#trashNoneBtn').addEventListener('click', () => {
+    for (const m of items) state.trashSelected.delete(trashKey(m));
+    renderTrash(provider);
+  });
+  root.querySelectorAll('.trash-check').forEach(cb => cb.addEventListener('change', () => {
+    cb.checked ? state.trashSelected.add(cb.dataset.key) : state.trashSelected.delete(cb.dataset.key);
+    renderTrash(provider);
+  }));
+  $('#permanentDeleteBtn').addEventListener('click', permanentlyDeleteSelected);
+}
+
+async function permanentlyDeleteSelected() {
+  const provider = $('#trashProvider').value;
+  const items = (state.trashMessages[provider] || []).filter(m => state.trashSelected.has(trashKey(m)));
+  if (!items.length) return toast('Aucun élément sélectionné.');
+
+  if (!window.confirm(`Supprimer définitivement ${items.length} mail${items.length > 1 ? 's' : ''} ? Cette action est irréversible.`)) return;
+
+  const btn = $('#permanentDeleteBtn');
+  setBusy(btn, true, `Suppression 0/${items.length}`);
+
+  let done = 0, failed = 0;
+  try {
+    if (provider === 'gmail') {
+      await requestGmailPermanentDeleteAccess();
+    }
+
+    for (const m of items) {
+      try {
+        if (provider === 'gmail') {
+          await gmailApi(`/messages/${m.id}`, { method: 'DELETE' });
+        } else {
+          await graph(`/me/messages/${encodeURIComponent(m.id)}/permanentDelete`, { method: 'POST' });
+        }
+        state.trashSelected.delete(trashKey(m));
+        state.trashMessages[provider] = state.trashMessages[provider].filter(x => x.id !== m.id);
+      } catch (e) {
+        console.error(e);
+        failed++;
+      }
+      done++;
+      if (btn) btn.textContent = `Suppression ${done}/${items.length}`;
+    }
+
+    renderTrash(provider);
+    toast(failed ? `${done - failed} supprimés définitivement · ${failed} échec(s)` : `${done} mails supprimés définitivement`);
+  } catch (e) {
+    console.error(e);
+    toast(e.message || 'Suppression définitive impossible');
+  } finally {
+    if (btn?.isConnected) setBusy(btn, false);
+  }
+}
+
 async function executeTrash() {
   const items = selectedMessages();
   const btn = $('#trashSelectedBtn');
-  setBusy(btn, true, `Suppression 0/${items.length}`);
+  setBusy(btn, true, `Désabonnement…`);
+
+  let unsub = { done: 0, manual: [], failed: 0 };
+  try {
+    unsub = await autoUnsubscribeSelected(items);
+  } catch (e) {
+    console.warn('Désabonnement global', e);
+  }
+
+  btn.textContent = `Suppression 0/${items.length}`;
   let done = 0, failed = 0;
   const workers = 4;
   let cursor = 0;
@@ -767,15 +1145,30 @@ async function executeTrash() {
   await Promise.all(Array.from({ length: Math.min(workers, items.length) }, worker));
   renderResults('gmail');
   renderResults('outlook');
+
+  const manualByProvider = {
+    gmail: unsub.manual.filter(x => items.some(m => m.provider === 'gmail' && (m.senderLabel === x.sender || m.sender === x.sender))),
+    outlook: unsub.manual.filter(x => items.some(m => m.provider === 'outlook' && (m.senderLabel === x.sender || m.sender === x.sender)))
+  };
+  if (manualByProvider.gmail.length) renderManualUnsubs(manualByProvider.gmail, 'gmail');
+  if (manualByProvider.outlook.length) renderManualUnsubs(manualByProvider.outlook, 'outlook');
+
   setBusy(btn, false);
   updateBulk();
-  toast(failed ? `${done - failed} supprimés · ${failed} échec(s)` : `${done} mails envoyés à la corbeille`);
+
+  const parts = [`${done - failed}/${done} mails à la corbeille`];
+  if (settings.autoUnsubscribe) {
+    if (unsub.done) parts.push(`${unsub.done} désabonnement${unsub.done > 1 ? 's' : ''} auto`);
+    if (unsub.manual.length) parts.push(`${unsub.manual.length} à confirmer`);
+  }
+  toast(parts.join(' · '));
 }
 
 function openSettings(message) {
   $('#googleClientId').value = settings.googleClientId;
   $('#microsoftClientId').value = settings.microsoftClientId;
   $('#autoSelectDetected').checked = settings.autoSelect;
+  $('#autoUnsubscribe').checked = settings.autoUnsubscribe;
   if (message) toast(message);
   $('#settingsDialog').showModal();
 }
@@ -784,6 +1177,7 @@ function saveSettings() {
   localStorage.setItem('cleaner.googleClientId', $('#googleClientId').value.trim());
   localStorage.setItem('cleaner.microsoftClientId', $('#microsoftClientId').value.trim());
   localStorage.setItem('cleaner.autoSelect', String($('#autoSelectDetected').checked));
+  localStorage.setItem('cleaner.autoUnsubscribe', String($('#autoUnsubscribe').checked));
   state.msal = null; state.microsoftToken = null; state.msAccount = null;
   toast('Réglages enregistrés');
 }
@@ -801,6 +1195,8 @@ $('#gmailConnectBtn').addEventListener('click', gmailConnect);
 $('#gmailScanBtn').addEventListener('click', gmailScan);
 $('#outlookConnectBtn').addEventListener('click', outlookConnect);
 $('#outlookScanBtn').addEventListener('click', outlookScan);
+$('#trashScanBtn').addEventListener('click', scanTrash);
+$('#trashProvider').addEventListener('change', () => renderTrash($('#trashProvider').value));
 $('#trashSelectedBtn').addEventListener('click', trashSelected);
 $('#confirmTrashBtn').addEventListener('click', executeTrash);
 $$('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
