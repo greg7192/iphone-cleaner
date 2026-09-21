@@ -393,14 +393,50 @@ async function gmailConnect() {
   client.requestAccessToken({ prompt: state.googleToken ? '' : 'consent' });
 }
 
-async function gmailApi(path, options = {}) {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function gmailApi(path, options = {}, attempt = 0) {
   if (!state.googleToken) throw new Error('Gmail non connecté');
+
+  const headers = { Authorization: `Bearer ${state.googleToken}`, ...(options.headers || {}) };
+  if (options.body) headers['Content-Type'] = 'application/json';
+
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
     ...options,
-    headers: { Authorization: `Bearer ${state.googleToken}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers,
   });
-  if (res.status === 401) { state.googleToken = null; $('#gmailStatus').textContent = 'Session expirée'; $('#gmailScanBtn').disabled = true; }
-  if (!res.ok) throw new Error(`Gmail ${res.status}: ${await res.text()}`);
+
+  if (res.status === 401) {
+    state.googleToken = null;
+    $('#gmailStatus').textContent = 'Session expirée';
+    $('#gmailScanBtn').disabled = true;
+  }
+
+  if (!res.ok) {
+    const raw = await res.text();
+    let detail = raw;
+    let reason = '';
+    try {
+      const parsed = JSON.parse(raw);
+      detail = parsed?.error?.message || raw;
+      reason = parsed?.error?.errors?.[0]?.reason || parsed?.error?.status || '';
+    } catch {}
+
+    const combined = `${reason} ${detail}`;
+    const retryable =
+      res.status === 429 ||
+      res.status === 500 ||
+      res.status === 503 ||
+      (res.status === 403 && /rateLimitExceeded|userRateLimitExceeded|quota/i.test(combined));
+
+    if (retryable && attempt < 4) {
+      await sleep(900 * Math.pow(2, attempt));
+      return gmailApi(path, options, attempt + 1);
+    }
+
+    throw new Error(`Gmail ${res.status}${reason ? ' (' + reason + ')' : ''}: ${detail}`);
+  }
+
   return res.status === 204 ? null : res.json();
 }
 
@@ -421,8 +457,9 @@ async function gmailScan() {
     } while (pageToken && ids.length < limit);
 
     const messages = [];
-    for (let i = 0; i < ids.length; i += 8) {
-      const batch = ids.slice(i, i + 8);
+    for (let i = 0; i < ids.length; i += 2) {
+      const batch = ids.slice(i, i + 2);
+      btn.textContent = `Analyse ${Math.min(i + 2, ids.length)}/${ids.length}`;
       const chunk = await Promise.all(batch.map(id => gmailApi(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=List-Unsubscribe&metadataHeaders=List-ID&metadataHeaders=Precedence&metadataHeaders=Auto-Submitted&metadataHeaders=X-Auto-Response-Suppress`)));
       for (const m of chunk) {
         const headers = m.payload?.headers || [];
@@ -435,6 +472,7 @@ async function gmailScan() {
           messages.push({ provider: 'gmail', id: m.id, threadId: m.threadId, from, sender: normalizeSender(from), senderLabel: senderName(from), subject, ts, unsubscribeUrl: detected.unsubscribeUrl, score: detected.score });
         }
       }
+      if (i + 2 < ids.length) await sleep(140);
     }
     state.messages.gmail = messages;
     applyAutoSelection('gmail');
@@ -442,7 +480,9 @@ async function gmailScan() {
     toast(`${messages.length} newsletter${messages.length > 1 ? 's' : ''} détectée${messages.length > 1 ? 's' : ''}`);
   } catch (e) {
     console.error(e);
-    toast(e.message.includes('401') ? 'Reconnecte Gmail.' : 'Erreur pendant l’analyse Gmail.');
+    const msg = e?.message || 'Erreur Gmail inconnue';
+    $('#gmailResults').innerHTML = `<div class="empty"><strong>Erreur Gmail</strong><br><br>${escapeHtml(msg)}</div>`;
+    toast(msg.includes('401') ? 'Reconnecte Gmail.' : 'Erreur Gmail — détail affiché sous le bouton.');
   } finally {
     setBusy(btn, false);
     btn.disabled = !state.googleToken;
