@@ -110,6 +110,47 @@ dialog::backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
 .danger-note { color:#ffb6be; font-size:12px; line-height:1.45; margin-top:12px; }
 .unsub-note { color:#9fdcaf; font-size:12px; line-height:1.45; margin-top:8px; }
 
+
+.local-cleaner-grid { display:grid; gap:12px; margin-top:12px; }
+.local-card { padding:16px; border:1px solid var(--border); border-radius:16px; background:rgba(255,255,255,.025); }
+.local-card h4 { margin:0 0 6px; font-size:18px; }
+.local-card p { margin:0 0 12px; color:var(--muted); line-height:1.45; }
+.local-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.local-actions .btn { flex:1; min-width:150px; }
+.scan-summary { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:12px 0; }
+.metric { padding:12px; border:1px solid var(--border); border-radius:13px; background:#0b1016; }
+.metric strong { display:block; font-size:21px; margin-bottom:2px; }
+.metric small { color:var(--muted); }
+.media-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.media-item { overflow:hidden; border:1px solid var(--border); border-radius:14px; background:#0b1016; }
+.media-thumb { width:100%; aspect-ratio:1; object-fit:cover; display:block; background:#070a0e; }
+.media-placeholder { width:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:36px; background:#070a0e; }
+.media-info { padding:10px; }
+.media-info strong { display:block; font-size:13px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.media-info small { display:block; color:var(--muted); margin-top:3px; line-height:1.35; }
+.media-tags { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+.media-tag { font-size:10px; padding:4px 6px; border-radius:999px; background:rgba(114,167,255,.12); color:var(--blue); border:1px solid rgba(114,167,255,.18); }
+.media-tag.warn { color:#ffcf75; background:rgba(255,207,117,.08); border-color:rgba(255,207,117,.18); }
+.media-tag.bad { color:#ff9aa5; background:rgba(255,93,108,.08); border-color:rgba(255,93,108,.18); }
+.cleanup-list { display:grid; gap:7px; margin-top:10px; }
+.cleanup-row { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:11px; border:1px solid var(--border); border-radius:12px; background:#0b1016; }
+.cleanup-main { min-width:0; }
+.cleanup-main strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cleanup-main small { color:var(--muted); }
+.cleanup-size { font-size:12px; color:var(--muted); white-space:nowrap; }
+.local-warning { margin-top:12px !important; padding:10px 12px; border-radius:12px; background:rgba(255,207,117,.07); color:#ffda8a !important; border:1px solid rgba(255,207,117,.15); font-size:12px; }
+.cleaner-progress { width:100%; height:8px; appearance:none; border:0; border-radius:99px; overflow:hidden; background:#080b10; margin:10px 0; }
+.cleaner-progress::-webkit-progress-bar { background:#080b10; }
+.cleaner-progress::-webkit-progress-value { background:var(--accent); border-radius:99px; }
+.storage-guides { display:grid; gap:8px; margin-top:10px; }
+.storage-guide { padding:12px; border:1px solid var(--border); border-radius:13px; background:#0b1016; }
+.storage-guide strong { display:block; margin-bottom:4px; }
+.storage-guide small { color:var(--muted); line-height:1.4; display:block; }
+@media (min-width:680px) {
+  .scan-summary { grid-template-columns:repeat(4,1fr); }
+  .media-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+
 @media (max-width: 560px) {
   .hero { grid-template-columns: 1fr; }
   .hero-stat { width: 100%; aspect-ratio: auto; border-radius: 14px; padding: 12px; flex-direction: row; gap: 8px; }
@@ -250,20 +291,63 @@ dialog::backdrop { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
 
       <section id="iphonePanel" class="panel">
         <div class="card info-card">
-          <h3>Photos & fichiers iPhone</h3>
-          <p>Une web-app iPhone ne peut pas supprimer silencieusement toute ta photothèque ou les caches privés des autres apps. Ce module te donne les raccourcis de nettoyage sûrs qui restent gratuits.</p>
-          <div class="iphone-actions">
-            <article>
-              <strong>Doublons Photos</strong>
-              <p>Photos → Albums → Doublons → Fusionner.</p>
+          <p class="eyebrow">Analyse locale · aucune photo envoyée</p>
+          <h3>Cleaner iPhone</h3>
+          <p>Analyse tes photos, vidéos et fichiers directement sur l’iPhone. Cleaner cherche les doublons probables, les images très similaires, les photos potentiellement floues et les fichiers qui prennent le plus de place.</p>
+
+          <div class="local-cleaner-grid">
+            <article class="local-card">
+              <h4>📸 Photos & vidéos</h4>
+              <p>Sélectionne un lot depuis Photos. L’analyse se fait uniquement dans Safari, sans serveur.</p>
+              <input id="photoPicker" type="file" accept="image/*,video/*" multiple hidden>
+              <div class="local-actions">
+                <button id="choosePhotosBtn" class="btn primary" type="button">Choisir photos / vidéos</button>
+                <button id="resetPhotosBtn" class="btn secondary" type="button">Réinitialiser</button>
+              </div>
+              <progress id="photoProgress" class="cleaner-progress" value="0" max="100" hidden></progress>
+              <p id="photoStatus" class="help">Aucun fichier sélectionné.</p>
+              <div id="photoSummary"></div>
+              <div id="photoResults"></div>
+              <p class="local-warning">iOS ne donne pas à une web‑app le droit de supprimer directement les originaux de ta photothèque. Cleaner te montre précisément quoi supprimer ; la suppression finale reste dans Photos. Pour du vrai “1 clic”, il faudra ajouter un petit raccourci iOS natif ensuite.</p>
             </article>
-            <article>
-              <strong>Captures d’écran</strong>
-              <p>Photos → Albums → Captures d’écran → Sélectionner pour supprimer en masse.</p>
+
+            <article class="local-card">
+              <h4>📁 Fichiers & téléchargements</h4>
+              <p>Analyse des documents, ZIP, PDF, vidéos et autres fichiers lourds ou dupliqués dans Fichiers.</p>
+              <input id="filePicker" type="file" multiple hidden>
+              <input id="folderPicker" type="file" webkitdirectory multiple hidden>
+              <div class="local-actions">
+                <button id="chooseFilesBtn" class="btn primary" type="button">Choisir des fichiers</button>
+                <button id="chooseFolderBtn" class="btn secondary" type="button">Analyser un dossier</button>
+              </div>
+              <progress id="fileProgress" class="cleaner-progress" value="0" max="100" hidden></progress>
+              <p id="fileStatus" class="help">Aucun fichier sélectionné.</p>
+              <div id="fileSummary"></div>
+              <div id="fileResults"></div>
+              <p class="local-warning">Safari peut analyser les fichiers que tu lui sélectionnes, mais ne peut pas effacer silencieusement les originaux dans Fichiers. Cleaner te donne la liste exacte et l’espace récupérable.</p>
             </article>
-            <article>
-              <strong>Fichiers lourds</strong>
-              <p>Fichiers → Sur mon iPhone / Téléchargements → trier par taille.</p>
+
+            <article class="local-card">
+              <h4>🧹 Autres gros consommateurs</h4>
+              <p>Les caches privés des autres apps sont protégés par iOS. Voici les endroits qui libèrent généralement le plus d’espace.</p>
+              <div class="storage-guides">
+                <div class="storage-guide">
+                  <strong>Messages</strong>
+                  <small>Réglages → Général → Stockage iPhone → Messages → Photos / Vidéos / GIF et autocollants. Supprime les pièces jointes les plus lourdes.</small>
+                </div>
+                <div class="storage-guide">
+                  <strong>WhatsApp</strong>
+                  <small>WhatsApp → Réglages → Stockage et données → Gérer le stockage. Trie les conversations et vidéos par taille.</small>
+                </div>
+                <div class="storage-guide">
+                  <strong>Safari</strong>
+                  <small>Réglages → Apps → Safari. Les téléchargements sont aussi visibles dans Fichiers → Téléchargements.</small>
+                </div>
+                <div class="storage-guide">
+                  <strong>Apps inutilisées</strong>
+                  <small>Réglages → Général → Stockage iPhone. iOS affiche les apps les plus lourdes et permet de les décharger sans perdre leurs documents.</small>
+                </div>
+              </div>
             </article>
           </div>
         </div>
@@ -1181,6 +1265,393 @@ function saveSettings() {
   state.msal = null; state.microsoftToken = null; state.msAccount = null;
   toast('Réglages enregistrés');
 }
+
+
+const localCleaner = {
+  photoFiles: [],
+  fileFiles: [],
+  photoResults: [],
+  fileResults: [],
+  objectUrls: [],
+};
+
+function humanBytes(bytes = 0) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 o';
+  const units = ['o', 'Ko', 'Mo', 'Go', 'To'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const n = bytes / Math.pow(1024, i);
+  return `${n >= 100 || i === 0 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)} ${units[i]}`;
+}
+
+async function partialFingerprint(file) {
+  const chunk = 1024 * 1024;
+  const first = await file.slice(0, Math.min(chunk, file.size)).arrayBuffer();
+  const lastStart = Math.max(0, file.size - chunk);
+  const last = await file.slice(lastStart, file.size).arrayBuffer();
+  const header = new TextEncoder().encode(`${file.size}|${file.type}|`);
+  const merged = new Uint8Array(header.byteLength + first.byteLength + last.byteLength);
+  merged.set(header, 0);
+  merged.set(new Uint8Array(first), header.byteLength);
+  merged.set(new Uint8Array(last), header.byteLength + first.byteLength);
+  const digest = await crypto.subtle.digest('SHA-256', merged);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function imageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    localCleaner.objectUrls.push(url);
+    const img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = () => reject(new Error('Image illisible'));
+    img.src = url;
+  });
+}
+
+async function imageSignals(file) {
+  try {
+    const { img } = await imageFromFile(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 32, 32);
+    const data = ctx.getImageData(0, 0, 32, 32).data;
+    const gray = new Float32Array(32 * 32);
+    let sum = 0;
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      const g = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+      gray[p] = g;
+      sum += g;
+    }
+
+    // 64-bit average hash, tolerant enough for very similar images.
+    const small = document.createElement('canvas');
+    small.width = 8; small.height = 8;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    sctx.drawImage(img, 0, 0, 8, 8);
+    const sdata = sctx.getImageData(0, 0, 8, 8).data;
+    const vals = [];
+    let ssum = 0;
+    for (let i = 0; i < sdata.length; i += 4) {
+      const g = 0.299*sdata[i] + 0.587*sdata[i+1] + 0.114*sdata[i+2];
+      vals.push(g); ssum += g;
+    }
+    const avg = ssum / vals.length;
+    const ahash = vals.map(v => v >= avg ? '1' : '0').join('');
+
+    // Edge energy: low values are often blurry, but this is only a hint.
+    let edge = 0, count = 0;
+    for (let y = 1; y < 31; y++) {
+      for (let x = 1; x < 31; x++) {
+        const i = y*32+x;
+        edge += Math.abs(gray[i] - gray[i-1]) + Math.abs(gray[i] - gray[i-32]);
+        count += 2;
+      }
+    }
+    const sharpness = edge / Math.max(1, count);
+
+    return {
+      width: img.naturalWidth || 0,
+      height: img.naturalHeight || 0,
+      ahash,
+      sharpness,
+      thumbUrl: localCleaner.objectUrls[localCleaner.objectUrls.length - 1],
+    };
+  } catch {
+    return { width:0, height:0, ahash:null, sharpness:null, thumbUrl:null };
+  }
+}
+
+function hamming(a, b) {
+  if (!a || !b || a.length !== b.length) return Infinity;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+  return d;
+}
+
+async function analyzePhotoFiles(files) {
+  const pickerFiles = [...files];
+  localCleaner.photoFiles = pickerFiles;
+  localCleaner.photoResults = [];
+
+  const progress = $('#photoProgress');
+  const status = $('#photoStatus');
+  progress.hidden = false;
+  progress.value = 0;
+  status.textContent = `Préparation de ${pickerFiles.length} élément${pickerFiles.length > 1 ? 's' : ''}…`;
+
+  const results = [];
+  for (let i = 0; i < pickerFiles.length; i++) {
+    const file = pickerFiles[i];
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const r = {
+      file,
+      name: file.name || `Élément ${i+1}`,
+      size: file.size || 0,
+      type: isVideo ? 'video' : isImage ? 'image' : 'other',
+      fingerprint: null,
+      duplicateOf: null,
+      similarTo: null,
+      width:0, height:0, ahash:null, sharpness:null, thumbUrl:null,
+      tags: [],
+      suggested: false,
+    };
+
+    status.textContent = `Analyse ${i+1}/${pickerFiles.length} · ${r.name}`;
+    progress.value = ((i+1) / Math.max(1,pickerFiles.length))*100;
+
+    try { r.fingerprint = await partialFingerprint(file); } catch {}
+    if (isImage) {
+      const sig = await imageSignals(file);
+      Object.assign(r, sig);
+    }
+    if (isVideo && r.size >= 100 * 1024 * 1024) r.tags.push('Grosse vidéo');
+
+    results.push(r);
+    if ((i+1) % 4 === 0) await sleep(25);
+  }
+
+  // Exact/probable duplicates via strong partial fingerprint + exact size.
+  const byFp = new Map();
+  for (const r of results) {
+    if (!r.fingerprint) continue;
+    const key = `${r.size}:${r.fingerprint}`;
+    const arr = byFp.get(key) || [];
+    arr.push(r);
+    byFp.set(key, arr);
+  }
+  for (const arr of byFp.values()) {
+    if (arr.length < 2) continue;
+    arr.sort((a,b) => (a.file.lastModified || 0) - (b.file.lastModified || 0));
+    for (let i = 1; i < arr.length; i++) {
+      arr[i].duplicateOf = arr[0].name;
+      arr[i].tags.push('Doublon probable');
+      arr[i].suggested = true;
+    }
+  }
+
+  // Similar images, only when not already exact duplicate.
+  const imgs = results.filter(r => r.type === 'image' && r.ahash);
+  for (let i = 0; i < imgs.length; i++) {
+    if (imgs[i].duplicateOf) continue;
+    for (let j = 0; j < i; j++) {
+      if (imgs[j].duplicateOf) continue;
+      const ratioA = imgs[i].height ? imgs[i].width / imgs[i].height : 0;
+      const ratioB = imgs[j].height ? imgs[j].width / imgs[j].height : 0;
+      if (Math.abs(ratioA - ratioB) > 0.08) continue;
+      if (hamming(imgs[i].ahash, imgs[j].ahash) <= 5) {
+        imgs[i].similarTo = imgs[j].name;
+        imgs[i].tags.push('Très similaire');
+        break;
+      }
+    }
+  }
+
+  // Blur hint, not auto-selected.
+  for (const r of imgs) {
+    if (Number.isFinite(r.sharpness) && r.sharpness < 7.5) r.tags.push('Floue ?');
+  }
+
+  localCleaner.photoResults = results;
+  status.textContent = `${results.length} éléments analysés · ${humanBytes(results.reduce((s,r)=>s+r.size,0))}`;
+  progress.hidden = true;
+  renderPhotoAnalysis();
+}
+
+function renderPhotoAnalysis() {
+  const results = localCleaner.photoResults;
+  const summary = $('#photoSummary');
+  const root = $('#photoResults');
+
+  if (!results.length) {
+    summary.innerHTML = '';
+    root.innerHTML = '';
+    return;
+  }
+
+  const duplicateBytes = results.filter(r => r.duplicateOf).reduce((s,r)=>s+r.size,0);
+  const duplicateCount = results.filter(r => r.duplicateOf).length;
+  const similarCount = results.filter(r => r.similarTo).length;
+  const blurryCount = results.filter(r => r.tags.includes('Floue ?')).length;
+  const largeVideos = results.filter(r => r.type === 'video' && r.size >= 100*1024*1024);
+  const top = [...results].sort((a,b)=>b.size-a.size).slice(0,40);
+
+  summary.innerHTML = `
+    <div class="scan-summary">
+      <div class="metric"><strong>${duplicateCount}</strong><small>doublons probables</small></div>
+      <div class="metric"><strong>${similarCount}</strong><small>photos similaires</small></div>
+      <div class="metric"><strong>${blurryCount}</strong><small>photos floues ?</small></div>
+      <div class="metric"><strong>${humanBytes(duplicateBytes)}</strong><small>récupérable sur doublons</small></div>
+    </div>
+    ${largeVideos.length ? `<p class="unsub-note">🎬 ${largeVideos.length} vidéo${largeVideos.length>1?'s':''} de plus de 100 Mo · ${humanBytes(largeVideos.reduce((s,r)=>s+r.size,0))}</p>` : ''}
+  `;
+
+  root.innerHTML = `
+    <div class="results-toolbar">
+      <strong>Les plus lourds / à vérifier</strong>
+      <button id="copyPhotoCleanupBtn" class="mini-btn" type="button">Copier la liste</button>
+    </div>
+    <div class="media-grid">
+      ${top.map(r => `
+        <article class="media-item">
+          ${r.type === 'image' && r.thumbUrl
+            ? `<img class="media-thumb" src="${escapeAttr(r.thumbUrl)}" alt="">`
+            : `<div class="media-placeholder">${r.type === 'video' ? '🎬' : '📄'}</div>`}
+          <div class="media-info">
+            <strong>${escapeHtml(r.name)}</strong>
+            <small>${humanBytes(r.size)}${r.width ? ` · ${r.width}×${r.height}` : ''}</small>
+            <div class="media-tags">
+              ${r.tags.map(t => `<span class="media-tag ${t.includes('Doublon') ? 'bad' : t.includes('Floue') ? 'warn' : ''}">${escapeHtml(t)}</span>`).join('')}
+            </div>
+          </div>
+        </article>`).join('')}
+    </div>
+  `;
+
+  $('#copyPhotoCleanupBtn')?.addEventListener('click', async () => {
+    const lines = results
+      .filter(r => r.duplicateOf || r.similarTo || r.tags.includes('Grosse vidéo') || r.tags.includes('Floue ?'))
+      .map(r => `${r.name} — ${humanBytes(r.size)} — ${[
+        r.duplicateOf ? `doublon de ${r.duplicateOf}` : '',
+        r.similarTo ? `similaire à ${r.similarTo}` : '',
+        ...r.tags
+      ].filter(Boolean).join(', ')}`);
+    if (!lines.length) return toast('Aucune suggestion à copier.');
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      toast('Liste copiée');
+    } catch {
+      toast('Copie impossible sur ce navigateur.');
+    }
+  });
+}
+
+async function analyzeGenericFiles(files) {
+  const pickerFiles = [...files];
+  localCleaner.fileFiles = pickerFiles;
+  localCleaner.fileResults = [];
+  const progress = $('#fileProgress');
+  const status = $('#fileStatus');
+  progress.hidden = false;
+  progress.value = 0;
+
+  const results = [];
+  for (let i = 0; i < pickerFiles.length; i++) {
+    const file = pickerFiles[i];
+    status.textContent = `Analyse ${i+1}/${pickerFiles.length} · ${file.name}`;
+    progress.value = ((i+1)/Math.max(1,pickerFiles.length))*100;
+    let fp = null;
+    try { fp = await partialFingerprint(file); } catch {}
+    results.push({
+      file,
+      name:file.name || `Fichier ${i+1}`,
+      size:file.size || 0,
+      type:file.type || '',
+      fingerprint:fp,
+      duplicateOf:null,
+      suggested:false,
+    });
+    if ((i+1)%5===0) await sleep(20);
+  }
+
+  const groups = new Map();
+  for (const r of results) {
+    if (!r.fingerprint) continue;
+    const key = `${r.size}:${r.fingerprint}`;
+    const arr = groups.get(key) || [];
+    arr.push(r);
+    groups.set(key, arr);
+  }
+  for (const arr of groups.values()) {
+    if (arr.length < 2) continue;
+    arr.sort((a,b)=>(a.file.lastModified||0)-(b.file.lastModified||0));
+    for (let i=1;i<arr.length;i++) {
+      arr[i].duplicateOf = arr[0].name;
+      arr[i].suggested = true;
+    }
+  }
+
+  localCleaner.fileResults = results;
+  status.textContent = `${results.length} fichiers analysés · ${humanBytes(results.reduce((s,r)=>s+r.size,0))}`;
+  progress.hidden = true;
+  renderFileAnalysis();
+}
+
+function renderFileAnalysis() {
+  const results = localCleaner.fileResults;
+  const summary = $('#fileSummary');
+  const root = $('#fileResults');
+  if (!results.length) {
+    summary.innerHTML = ''; root.innerHTML=''; return;
+  }
+
+  const dups = results.filter(r=>r.duplicateOf);
+  const recoverable = dups.reduce((s,r)=>s+r.size,0);
+  const large = results.filter(r=>r.size >= 50*1024*1024);
+  const top = [...results].sort((a,b)=>b.size-a.size).slice(0,60);
+
+  summary.innerHTML = `
+    <div class="scan-summary">
+      <div class="metric"><strong>${results.length}</strong><small>fichiers analysés</small></div>
+      <div class="metric"><strong>${dups.length}</strong><small>doublons probables</small></div>
+      <div class="metric"><strong>${large.length}</strong><small>+ de 50 Mo</small></div>
+      <div class="metric"><strong>${humanBytes(recoverable)}</strong><small>récupérable sur doublons</small></div>
+    </div>`;
+
+  root.innerHTML = `
+    <div class="results-toolbar">
+      <strong>Fichiers les plus lourds</strong>
+      <button id="copyFileCleanupBtn" class="mini-btn" type="button">Copier la liste</button>
+    </div>
+    <div class="cleanup-list">
+      ${top.map(r=>`
+        <div class="cleanup-row">
+          <span>${r.duplicateOf ? '🗑️' : r.size >= 50*1024*1024 ? '⚠️' : '📄'}</span>
+          <span class="cleanup-main">
+            <strong>${escapeHtml(r.name)}</strong>
+            <small>${r.duplicateOf ? `Doublon probable de ${escapeHtml(r.duplicateOf)}` : (r.type || 'Fichier')}</small>
+          </span>
+          <span class="cleanup-size">${humanBytes(r.size)}</span>
+        </div>`).join('')}
+    </div>`;
+
+  $('#copyFileCleanupBtn')?.addEventListener('click', async ()=>{
+    const lines = top.filter(r=>r.duplicateOf || r.size >= 50*1024*1024)
+      .map(r=>`${r.name} — ${humanBytes(r.size)}${r.duplicateOf ? ` — doublon de ${r.duplicateOf}` : ''}`);
+    if (!lines.length) return toast('Aucun gros fichier ou doublon à copier.');
+    try { await navigator.clipboard.writeText(lines.join('\n')); toast('Liste copiée'); }
+    catch { toast('Copie impossible sur ce navigateur.'); }
+  });
+}
+
+function resetLocalPhotos() {
+  localCleaner.objectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
+  localCleaner.objectUrls = [];
+  localCleaner.photoFiles = [];
+  localCleaner.photoResults = [];
+  $('#photoPicker').value = '';
+  $('#photoStatus').textContent = 'Aucun fichier sélectionné.';
+  $('#photoSummary').innerHTML = '';
+  $('#photoResults').innerHTML = '';
+  $('#photoProgress').hidden = true;
+}
+
+$('#choosePhotosBtn')?.addEventListener('click', () => $('#photoPicker').click());
+$('#resetPhotosBtn')?.addEventListener('click', resetLocalPhotos);
+$('#photoPicker')?.addEventListener('change', e => {
+  if (e.target.files?.length) analyzePhotoFiles(e.target.files);
+});
+$('#chooseFilesBtn')?.addEventListener('click', () => $('#filePicker').click());
+$('#chooseFolderBtn')?.addEventListener('click', () => $('#folderPicker').click());
+$('#filePicker')?.addEventListener('change', e => {
+  if (e.target.files?.length) analyzeGenericFiles(e.target.files);
+});
+$('#folderPicker')?.addEventListener('change', e => {
+  if (e.target.files?.length) analyzeGenericFiles(e.target.files);
+});
+
 
 function switchTab(tab) {
   state.activeTab = tab;
